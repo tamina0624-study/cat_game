@@ -28,7 +28,11 @@ export async function startGame(host:HTMLElement,say:(s:string)=>void,report:(s:
  box(scene,mat('#9caa93'),[-2,2.85,-3.74],[2.7,2.8,.12]);box(scene,new T.MeshStandardMaterial({color:'#d6e8e4',emissive:'#d6e8e4',emissiveIntensity:.35}),[-2,2.85,-3.65],[2.46,2.55,.08]);for(const x of [-3.28,-2,-.72])box(scene,white,[x,2.85,-3.52],[.075,2.75,.12]);box(scene,white,[-2,2.85,-3.52],[2.7,.07,.12]);box(scene,wood,[-2,1.4,-3.45],[3,.14,.6]);
  box(scene,wood,[2.65,.62,-2.7],[1.6,.13,.7]);for(const x of [2,3.3])box(scene,dark,[x,.3,-2.7],[.07,.6,.5]);
  mesh(new T.CylinderGeometry(.29,.2,.5,32),mat('#bd7350'),scene,[2.7,.92,-2.7]);for(let i=0;i<7;i++){const a=i*2.4;const leaf=ell(scene,mat(i%2?'#45674d':'#6a845a'),[2.7+Math.sin(a)*.2,1.45+(i%3)*.12,-2.7+Math.cos(a)*.2],[.12,.4,.045]);leaf.rotation.z=Math.sin(a)*.6;}
- const cat=loaded.scene;scene.add(cat);cat.position.y=groundHeight(0,0);
+ // The GLB also carries its Blender studio floor for offline renders.  Add only
+ // the cat root so that scene helper geometry can never hide the pet in-game.
+ const cat=loaded.scene.getObjectByName('Mugi_Tabby_White_V6');
+ if(!cat)throw new Error('Missing tabby cat root');
+ scene.add(cat);cat.position.y=groundHeight(0,0);
  cat.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;o.receiveShadow=true;}});
  const required=(name:string)=>{const o=cat.getObjectByName(name);if(!o)throw new Error('Missing model node '+name);return o;};
  const head=required('HeadRoot'),neck=required('Neck'),tail=required('TailRoot'),eyes=[required('EyeL'),required('EyeR')];
