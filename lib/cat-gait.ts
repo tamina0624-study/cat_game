@@ -9,7 +9,7 @@ export class CatGait {
   const front=name[0]==='F',neutral=new T.Vector3(upper.position.x,.064,upper.position.z+.015),anchor=cat.localToWorld(neutral.clone());anchor.y=groundHeight(anchor.x,anchor.z)+.064;
   this.legs.push({name,upper,lower,foot,front,l1:front?.50:.47,l2:.48,neutral,anchor,from:anchor.clone(),to:anchor.clone(),progress:1,swing:false,wasSwing:false,offset:i*.25});
  }}
- update(dt:number,velocity:T.Vector3,turn:number,play=false,time=0){
+ update(dt:number,velocity:T.Vector3,turn:number,activity:'walk'|'play'|'groom'='walk',time=0){
   const moving=velocity.length()>.035||Math.abs(turn)>.002;this.cycle+=velocity.length()*dt/.45+Math.abs(turn)*.38;
   this.cat.updateMatrixWorld(true);
   for(const leg of this.legs){
@@ -19,7 +19,18 @@ export class CatGait {
    if(!leg.swing&&((moving&&wantSwing&&!leg.wasSwing)||(needsStep&&this.legs.filter(l=>l.swing).length<2))){leg.swing=true;leg.progress=0;leg.from.copy(leg.anchor);leg.to.copy(neutral).addScaledVector(velocity,.30);leg.to.y=groundHeight(leg.to.x,leg.to.z)+.064;}
    leg.wasSwing=wantSwing;
    if(leg.swing){leg.progress=Math.min(1,leg.progress+dt/.27);const p=leg.progress,s=p*p*(3-2*p);leg.anchor.lerpVectors(leg.from,leg.to,s);leg.anchor.y+=Math.sin(Math.PI*p)*.11;if(p===1)leg.swing=false;}
-   let goal=leg.anchor.clone();if(play&&leg.name==='FL'){goal=neutral.clone();goal.y+=.20+Math.sin(time*7)*.045;goal.add(this.cat.getWorldDirection(new T.Vector3()).multiplyScalar(.15));}
+   let goal=leg.anchor.clone();
+   if(activity==='play'&&leg.name==='FL'){
+    goal=neutral.clone();goal.y+=.20+Math.sin(time*7)*.045;goal.add(this.cat.getWorldDirection(new T.Vector3()).multiplyScalar(.15));
+   }
+   if(activity==='groom'&&leg.front){
+    const paw=(Math.floor(time*1.7)%2===0)===(leg.name==='FL');
+    if(paw){
+     const side=leg.name==='FL'?.18:-.18;
+     goal=this.cat.localToWorld(new T.Vector3(side,1.36,.58));
+     goal.y+=Math.sin(time*9)*.035;
+    }
+   }
    this.solve(leg,this.cat.worldToLocal(goal));
   }
  }

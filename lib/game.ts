@@ -38,28 +38,35 @@ export async function startGame(host:HTMLElement,say:(s:string)=>void,report:(s:
  const string=tube(toy,mat('#dbd8b9'),[[0,.1,0],[.2,.7,0],[.6,1.2,0]],.009);string.castShadow=false;
 
  const ray=new T.Raycaster(),pointer=new T.Vector2(),plane=new T.Plane(),target=new T.Vector3(0,1.3,1);
- let active='pet',down=false,petUntil=0,holdUntil=0,feedUntil=0,feeding=false,seekingFood=false,lastReward=0,lastReport=0,lastMove=0,frame=0,disposed=false;
+ let active='pet',down=false,petUntil=0,holdUntil=0,feedUntil=0,groomUntil=0,nextIdleAt=7+Math.random()*7,feeding=false,seekingFood=false,lastReward=0,lastReport=0,lastMove=0,frame=0,disposed=false;
  const stats={affection:42,fullness:55,fun:50},clock=new T.Clock();
  function reward(key:keyof Stats,n:number,t:number){if(t-lastReward<.3)return;stats[key]=Math.min(100,stats[key]+n);lastReward=t;report({...stats});}
  function locate(e:PointerEvent){const r=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(pointer,camera);plane.setFromNormalAndCoplanarPoint(camera.getWorldDirection(new T.Vector3()),cat.position.clone().add(new T.Vector3(0,1,0)));const hit=ray.ray.intersectPlane(plane,new T.Vector3());if(hit){hit.y=T.MathUtils.clamp(hit.y,cat.position.y+.3,cat.position.y+2.1);const offset=hit.clone().sub(cat.position);if(offset.length()>2)offset.setLength(2);target.copy(cat.position).add(offset);}}
- function pet(t:number){if(feeding)return;if(ray.intersectObject(cat,true).length){petUntil=t+1.4;holdUntil=t+3;nav.pause(3);void voice.play();reward('affection',2,t);say('立ち止まって、ごろごろ… なでてもらえてうれしそう。');}}
- function feed(){voice.unlock();if(feeding||seekingFood){say(feeding?'もぐもぐ… ゆっくり食べています。':'ごはんの器に向かっています。');return;}if(stats.fullness>=98){say('おなかいっぱい。少し休もうね。');return;}holdUntil=0;petUntil=0;food.scale.setScalar(1);food.visible=true;seekingFood=nav.request(FEED_SPOT,'feed');say(seekingFood?'ごはんの器に向かっています。':'少し場所を変えてから、もう一度ごはんをあげてね。');}
- function mode(m:string){voice.unlock();active=m;toy.visible=m==='toy';if(m==='feed')feed();else if(m==='toy'){if(!feeding&&!seekingFood){nav.pause(8);holdUntil=elapsed+8;}lastMove=elapsed;target.copy(cat.localToWorld(new T.Vector3(0,1.1,1)));say('近くでおもちゃを動かして、じゃらしてみよう。');}else say('歩いているむぎも、頭や体をなでると立ち止まるよ。');}
- function onDown(e:PointerEvent){if(e.button!==0)return;voice.unlock();down=true;locate(e);if(active==='pet')pet(elapsed);if(active==='feed')feed();}
- function onMove(e:PointerEvent){locate(e);const t=elapsed;if(active==='pet'&&down)pet(t);if(active==='toy'&&!feeding&&!seekingFood&&target.distanceTo(cat.position)<2){lastMove=t;holdUntil=t+2;nav.pause(2);reward('fun',1,t);say('おもちゃに夢中！ 前足で、ちょいちょい。');}}
+ function interruptIdle(){if(groomUntil>elapsed){groomUntil=0;say('毛づくろいを終えて、おさんぽを再開。');}nextIdleAt=elapsed+8+Math.random()*8;}
+ function pet(t:number){if(feeding)return;if(ray.intersectObject(cat,true).length){interruptIdle();petUntil=t+1.4;holdUntil=t+3;nav.pause(3);void voice.play();reward('affection',2,t);say('立ち止まって、ごろごろ… なでてもらえてうれしそう。');}}
+ function feed(){voice.unlock();interruptIdle();if(feeding||seekingFood){say(feeding?'もぐもぐ… ゆっくり食べています。':'ごはんの器に向かっています。');return;}if(stats.fullness>=98){say('おなかいっぱい。少し休もうね。');return;}holdUntil=0;petUntil=0;food.scale.setScalar(1);food.visible=true;seekingFood=nav.request(FEED_SPOT,'feed');say(seekingFood?'ごはんの器に向かっています。':'少し場所を変えてから、もう一度ごはんをあげてね。');}
+ function mode(m:string){voice.unlock();interruptIdle();active=m;toy.visible=m==='toy';if(m==='feed')feed();else if(m==='toy'){if(!feeding&&!seekingFood){nav.pause(8);holdUntil=elapsed+8;}lastMove=elapsed;target.copy(cat.localToWorld(new T.Vector3(0,1.1,1)));say('近くでおもちゃを動かして、じゃらしてみよう。');}else say('歩いているむぎも、頭や体をなでると立ち止まるよ。');}
+ function onDown(e:PointerEvent){if(e.button!==0)return;voice.unlock();interruptIdle();down=true;locate(e);if(active==='pet')pet(elapsed);if(active==='feed')feed();}
+ function onMove(e:PointerEvent){locate(e);const t=elapsed;if(active==='pet'&&down)pet(t);if(active==='toy'&&!feeding&&!seekingFood&&target.distanceTo(cat.position)<2){interruptIdle();lastMove=t;holdUntil=t+2;nav.pause(2);reward('fun',1,t);say('おもちゃに夢中！ 前足で、ちょいちょい。');}}
  function up(){down=false;}function blur(){down=false;}
  renderer.domElement.addEventListener('pointerdown',onDown);renderer.domElement.addEventListener('pointermove',onMove);window.addEventListener('pointerup',up);window.addEventListener('blur',blur);
  const resize=()=>{camera.aspect=host.clientWidth/host.clientHeight;camera.updateProjectionMatrix();renderer.setSize(host.clientWidth,host.clientHeight);};const observer=new ResizeObserver(resize);observer.observe(host);resize();
  let elapsed=0;
  function step(dt:number,t:number){
   const petting=t<petUntil,playing=active==='toy'&&t-lastMove<2&&!feeding&&!seekingFood;
-  const result=nav.update(dt,feeding||(!seekingFood&&t<holdUntil));
+  const grooming=t<groomUntil;
+  const result=nav.update(dt,grooming||feeding||(!seekingFood&&t<holdUntil));
+  if(!grooming&&!petting&&!playing&&!feeding&&!seekingFood&&!nav.path.length&&t>=nextIdleAt){
+   nextIdleAt=t+10+Math.random()*14;
+   if(Math.random()<.45){void voice.play();say('むぎが、ニャーとひと声。');}
+   else {groomUntil=t+3.8+Math.random()*1.8;nav.pause(groomUntil-t);say('むぎは座って、前脚と顔を毛づくろい。');}
+  }
   if(seekingFood&&distance(nav.position,FEED_SPOT)<.12&&!nav.path.length){const angle=Math.atan2(Math.sin(-nav.yaw),Math.cos(-nav.yaw));const turn=T.MathUtils.clamp(angle,-dt*1.7,dt*1.7);nav.yaw+=turn;nav.turning=turn;if(Math.abs(angle)<.03){seekingFood=false;feeding=true;feedUntil=t+4;stats.fullness=Math.min(100,stats.fullness+18);stats.affection=Math.min(100,stats.affection+3);report({...stats});say('もぐもぐ… ごはん、おいしいね。');}}
   if(feeding&&t>=feedUntil){feeding=false;food.visible=false;nav.kind='roam';nav.pause(3);holdUntil=t+3;void voice.play(true);say('ごちそうさま。ニャー！');}
   cat.position.set(nav.position.x,groundHeight(nav.position.x,nav.position.z),nav.position.z);cat.rotation.y=nav.yaw;cat.updateMatrixWorld(true);
-  const velocity=new T.Vector3(result.dx/dt,0,result.dz/dt);gait.update(dt,velocity,nav.turning,playing,t);
+  const velocity=new T.Vector3(result.dx/dt,0,result.dz/dt);gait.update(dt,velocity,nav.turning,grooming?'groom':playing?'play':'walk',t);
   const localToy=cat.worldToLocal(target.clone());
-  head.position.lerp(new T.Vector3(0,feeding?.48:1.35,feeding?1.02:.73),1-Math.exp(-dt*5));head.rotation.x=T.MathUtils.damp(head.rotation.x,feeding?.60+Math.sin(t*8)*.025:petting?-.10:playing?T.MathUtils.clamp((1.35-localToy.y)*.3,-.2,.25):Math.sin(t*2)*.018,6,dt);head.rotation.y=T.MathUtils.damp(head.rotation.y,playing?T.MathUtils.clamp(localToy.x*.4,-.45,.45):petting?Math.sin(t*3)*.05:Math.sin(t*.4)*.05,5,dt);
+  head.position.lerp(new T.Vector3(0,feeding?.48:grooming?1.20:1.35,feeding?1.02:grooming?.92:.73),1-Math.exp(-dt*5));head.rotation.x=T.MathUtils.damp(head.rotation.x,feeding?.60+Math.sin(t*8)*.025:grooming?.42+Math.sin(t*8)*.055:petting?-.10:playing?T.MathUtils.clamp((1.35-localToy.y)*.3,-.2,.25):Math.sin(t*2)*.018,6,dt);head.rotation.y=T.MathUtils.damp(head.rotation.y,grooming?Math.sin(t*1.7)*.18:playing?T.MathUtils.clamp(localToy.x*.4,-.45,.45):petting?Math.sin(t*3)*.05:Math.sin(t*.4)*.05,5,dt);
   const neckStart=new T.Vector3(0,1.02,.44),neckEnd=head.position.clone().add(new T.Vector3(0,-.08,-.08)),neckDirection=neckEnd.clone().sub(neckStart);neck.position.copy(neckStart).add(neckEnd).multiplyScalar(.5);neck.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),neckDirection.clone().normalize());neck.scale.y=neckDirection.length()/.58+ .24;
   const blink=(t%5.3)>5.1;for(const e of eyes)e.scale.y=T.MathUtils.damp(e.scale.y,petting?.2:blink?.1:1,22,dt);tail.rotation.z=Math.sin(t*1.8)*.06;tail.rotation.y=Math.sin(t*1.2)*.10;
   toy.visible=active==='toy'&&t-lastMove<8;if(toy.visible){toy.position.lerp(target,1-Math.exp(-dt*12));toy.rotation.z=Math.sin(t*5)*.1;}ball.rotation.y=t;
@@ -71,7 +78,7 @@ export async function startGame(host:HTMLElement,say:(s:string)=>void,report:(s:
  // All interaction timers use simulation time, so background tabs never skip meals or teleport.
 
  const debugWindow=window as Window & {__mugiDebug?:{inspect:()=>unknown;goal:(x:number,z:number)=>boolean;advance:(seconds:number)=>void}};
- if(process.env.NODE_ENV!=='production')debugWindow.__mugiDebug={inspect:()=>{const point=cat.localToWorld(new T.Vector3(0,1,.4)).project(camera);return {position:{...nav.position},yaw:nav.yaw,speed:nav.speed,path:nav.path,feeding,seekingFood,petting:elapsed<petUntil,elapsed,legs:gait.inspect(),screen:{x:(point.x+1)*host.clientWidth/2,y:(1-point.y)*host.clientHeight/2}};},goal:(x,z)=>nav.request({x,z},'feed'),advance:(seconds)=>{for(let n=0;n<seconds*60;n++){elapsed+=1/60;step(1/60,elapsed);}renderer.render(scene,camera);}};
+ if(process.env.NODE_ENV!=='production')debugWindow.__mugiDebug={inspect:()=>{const point=cat.localToWorld(new T.Vector3(0,1,.4)).project(camera);return {position:{...nav.position},yaw:nav.yaw,speed:nav.speed,path:nav.path,feeding,seekingFood,petting:elapsed<petUntil,grooming:elapsed<groomUntil,elapsed,legs:gait.inspect(),screen:{x:(point.x+1)*host.clientWidth/2,y:(1-point.y)*host.clientHeight/2}};},goal:(x,z)=>nav.request({x,z},'feed'),advance:(seconds)=>{for(let n=0;n<seconds*60;n++){elapsed+=1/60;step(1/60,elapsed);}renderer.render(scene,camera);}};
  animate();say('むぎがお部屋をおさんぽ。近づいて、なでてみよう。');
  return {mode,muted:voice.muted,reset:()=>{orbit.target.copy(cat.position).add(new T.Vector3(0,.95,0));camera.position.copy(cat.position).add(new T.Vector3(4.2,3.1,7.9));orbit.update();},download:()=>{const a=document.createElement('a');a.href='/models/mugi-walking-v4.glb';a.download='mugi-walking-v4.glb';a.click();say('歩行用の三毛猫モデルを保存しました。');},dispose:()=>{voice.dispose();disposed=true;cancelAnimationFrame(frame);observer.disconnect();orbit.dispose();window.removeEventListener('pointerup',up);window.removeEventListener('blur',blur);renderer.domElement.removeEventListener('pointerdown',onDown);renderer.domElement.removeEventListener('pointermove',onMove);delete debugWindow.__mugiDebug;const gs=new Set<T.BufferGeometry>(),ms=new Set<T.Material>();scene.traverse(o=>{if(o instanceof T.Mesh){gs.add(o.geometry);(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m));}});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose());renderer.dispose();renderer.domElement.remove();}};
 }
