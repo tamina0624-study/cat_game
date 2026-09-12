@@ -7,7 +7,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 type Stats={affection:number;fullness:number;fun:number};
 export type GameAPI={mode:(m:string)=>void;reset:()=>void;muted:(value:boolean)=>void;download:()=>void;dispose:()=>void};
 export async function startGame(host:HTMLElement,say:(s:string)=>void,report:(s:Stats)=>void):Promise<GameAPI>{
- const loaded=await new GLTFLoader().loadAsync('/models/mugi-tabby-white-v6.glb');
+ // v4 is the verified game-ready export: its segmented visual meshes and IK
+ // control nodes share the exact transform convention used below.
+ const loaded=await new GLTFLoader().loadAsync('/models/mugi-walking-v4.glb');
  const voice=createCatVoice();
  const scene=new T.Scene();scene.background=new T.Color('#e3e7dd');scene.fog=new T.Fog('#e3e7dd',15,35);
  const renderer=new T.WebGLRenderer({antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;host.appendChild(renderer.domElement);
@@ -28,11 +30,8 @@ export async function startGame(host:HTMLElement,say:(s:string)=>void,report:(s:
  box(scene,mat('#9caa93'),[-2,2.85,-3.74],[2.7,2.8,.12]);box(scene,new T.MeshStandardMaterial({color:'#d6e8e4',emissive:'#d6e8e4',emissiveIntensity:.35}),[-2,2.85,-3.65],[2.46,2.55,.08]);for(const x of [-3.28,-2,-.72])box(scene,white,[x,2.85,-3.52],[.075,2.75,.12]);box(scene,white,[-2,2.85,-3.52],[2.7,.07,.12]);box(scene,wood,[-2,1.4,-3.45],[3,.14,.6]);
  box(scene,wood,[2.65,.62,-2.7],[1.6,.13,.7]);for(const x of [2,3.3])box(scene,dark,[x,.3,-2.7],[.07,.6,.5]);
  mesh(new T.CylinderGeometry(.29,.2,.5,32),mat('#bd7350'),scene,[2.7,.92,-2.7]);for(let i=0;i<7;i++){const a=i*2.4;const leaf=ell(scene,mat(i%2?'#45674d':'#6a845a'),[2.7+Math.sin(a)*.2,1.45+(i%3)*.12,-2.7+Math.cos(a)*.2],[.12,.4,.045]);leaf.rotation.z=Math.sin(a)*.6;}
- // The GLB also carries its Blender studio floor for offline renders.  Add only
- // the cat root so that scene helper geometry can never hide the pet in-game.
- const cat=loaded.scene.getObjectByName('Mugi_Tabby_White_V6');
- if(!cat)throw new Error('Missing tabby cat root');
- scene.add(cat);cat.position.y=groundHeight(0,0);
+ // The game GLB contains only the complete cat hierarchy (no Blender studio).
+ const cat=loaded.scene;scene.add(cat);cat.position.y=groundHeight(0,0);
  cat.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;o.receiveShadow=true;}});
  const required=(name:string)=>{const o=cat.getObjectByName(name);if(!o)throw new Error('Missing model node '+name);return o;};
  const head=required('HeadRoot'),neck=required('Neck'),tail=required('TailRoot'),eyes=[required('EyeL'),required('EyeR')];
@@ -84,5 +83,5 @@ export async function startGame(host:HTMLElement,say:(s:string)=>void,report:(s:
  const debugWindow=window as Window & {__mugiDebug?:{inspect:()=>unknown;goal:(x:number,z:number)=>boolean;advance:(seconds:number)=>void}};
  if(process.env.NODE_ENV!=='production')debugWindow.__mugiDebug={inspect:()=>{const point=cat.localToWorld(new T.Vector3(0,1,.4)).project(camera);return {position:{...nav.position},yaw:nav.yaw,speed:nav.speed,path:nav.path,feeding,seekingFood,petting:elapsed<petUntil,grooming:elapsed<groomUntil,elapsed,legs:gait.inspect(),screen:{x:(point.x+1)*host.clientWidth/2,y:(1-point.y)*host.clientHeight/2}};},goal:(x,z)=>nav.request({x,z},'feed'),advance:(seconds)=>{for(let n=0;n<seconds*60;n++){elapsed+=1/60;step(1/60,elapsed);}renderer.render(scene,camera);}};
  animate();say('むぎがお部屋をおさんぽ。近づいて、なでてみよう。');
- return {mode,muted:voice.muted,reset:()=>{orbit.target.copy(cat.position).add(new T.Vector3(0,.95,0));camera.position.copy(cat.position).add(new T.Vector3(4.2,3.1,7.9));orbit.update();},download:()=>{const a=document.createElement('a');a.href='/models/mugi-tabby-white-v6.glb';a.download='mugi-tabby-white-v6.glb';a.click();say('キジ白の歩行用猫モデルを保存しました。');},dispose:()=>{voice.dispose();disposed=true;cancelAnimationFrame(frame);observer.disconnect();orbit.dispose();window.removeEventListener('pointerup',up);window.removeEventListener('blur',blur);renderer.domElement.removeEventListener('pointerdown',onDown);renderer.domElement.removeEventListener('pointermove',onMove);delete debugWindow.__mugiDebug;const gs=new Set<T.BufferGeometry>(),ms=new Set<T.Material>();scene.traverse(o=>{if(o instanceof T.Mesh){gs.add(o.geometry);(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m));}});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose());renderer.dispose();renderer.domElement.remove();}};
+ return {mode,muted:voice.muted,reset:()=>{orbit.target.copy(cat.position).add(new T.Vector3(0,.95,0));camera.position.copy(cat.position).add(new T.Vector3(4.2,3.1,7.9));orbit.update();},download:()=>{const a=document.createElement('a');a.href='/models/mugi-walking-v4.glb';a.download='mugi-walking-v4.glb';a.click();say('歩行用の猫モデルを保存しました。');},dispose:()=>{voice.dispose();disposed=true;cancelAnimationFrame(frame);observer.disconnect();orbit.dispose();window.removeEventListener('pointerup',up);window.removeEventListener('blur',blur);renderer.domElement.removeEventListener('pointerdown',onDown);renderer.domElement.removeEventListener('pointermove',onMove);delete debugWindow.__mugiDebug;const gs=new Set<T.BufferGeometry>(),ms=new Set<T.Material>();scene.traverse(o=>{if(o instanceof T.Mesh){gs.add(o.geometry);(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m));}});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose());renderer.dispose();renderer.domElement.remove();}};
 }
