@@ -7,7 +7,7 @@ import { startGame as startSeated } from '@/lib/game-v3';
 import { startGame as startOriginal } from '@/lib/game-v1';
 export default function Home() {
  const mount=useRef<HTMLDivElement>(null), api=useRef<GameAPI|null>(null);
- const stream=useRef<MediaStream|null>(null), audioContext=useRef<AudioContext|null>(null), source=useRef<MediaStreamAudioSourceNode|null>(null), processor=useRef<ScriptProcessorNode|null>(null), silentGain=useRef<GainNode|null>(null), pcmChunks=useRef<Float32Array[]>([]), recordTimer=useRef<number|null>(null), worker=useRef<Worker|null>(null), history=useRef<Array<{role:'user'|'assistant';content:string}>>([]);
+ const stream=useRef<MediaStream|null>(null), audioContext=useRef<AudioContext|null>(null), source=useRef<MediaStreamAudioSourceNode|null>(null), processor=useRef<ScriptProcessorNode|null>(null), silentGain=useRef<GainNode|null>(null), pcmChunks=useRef<Float32Array[]>([]), recordTimer=useRef<number|null>(null), transcriber=useRef<((audio:Float32Array,options:{language:string;task:string})=>Promise<{text:string}>)|null>(null), history=useRef<Array<{role:'user'|'assistant';content:string}>>([]);
  const [ready,setReady]=useState(false),[error,setError]=useState(''),[mode,setMode]=useState('pet'),[message,setMessage]=useState('むぎが、あなたを待っています。');
  const [muted,setMuted]=useState(false),[original,setOriginal]=useState(false);
  const [talkState,setTalkState]=useState<'idle'|'listening'|'thinking'|'speaking'|'unavailable'>('idle');
@@ -24,9 +24,9 @@ export default function Home() {
    const utterance=new SpeechSynthesisUtterance(data.reply);utterance.lang='ja-JP';utterance.rate=1.08;utterance.pitch=1.22;utterance.onend=()=>setTalkState('idle');utterance.onerror=()=>setTalkState('idle');window.speechSynthesis.speak(utterance);
   }catch(e){setTalkState('idle');setMessage(e instanceof Error?e.message:'会話につながりませんでした。');}}
  async function transcribe(sourceAudio:Float32Array,sampleRate:number){
-  const ratio=sampleRate/16000,length=Math.floor(sourceAudio.length/ratio),audio=new Float32Array(length);for(let i=0;i<length;i++)audio[i]=sourceAudio[Math.min(sourceAudio.length-1,Math.floor(i*ratio))];let instance=worker.current;
-  try{if(!instance){instance=new Worker(new URL('../lib/transcribe.worker.ts',import.meta.url),{type:'module',name:'mugi-transcriber'});worker.current=instance;}}catch{setTalkState('idle');setMessage('音声認識ワーカーを開始できませんでした。ページを再読み込みして、もう一度試してね。');return;}
-  instance.onmessage=(event:MessageEvent<{text?:string;error?:string}>)=>{if(event.data.error){setTalkState('idle');setMessage(event.data.error);return;}const text=event.data.text?.trim();if(!text){setTalkState('idle');setMessage('声を聞き取れませんでした。もう一度話してね。');return;}void answer(text);};instance.onerror=()=>{worker.current?.terminate();worker.current=null;setTalkState('idle');setMessage('音声認識ワーカーの実行に失敗しました。ページを再読み込みして、もう一度試してね。');};setTalkState('thinking');setMessage('初回は音声認識モデルを準備しています…');try{instance.postMessage({audio});}catch{setTalkState('idle');setMessage('録音データを音声認識へ渡せませんでした。もう一度試してね。');}
+  const ratio=sampleRate/16000,length=Math.floor(sourceAudio.length/ratio),audio=new Float32Array(length);for(let i=0;i<length;i++)audio[i]=sourceAudio[Math.min(sourceAudio.length-1,Math.floor(i*ratio))];setTalkState('thinking');
+  try{if(!transcriber.current){setMessage('初回は音声認識モデルを準備しています…');const {pipeline}=await import('@huggingface/transformers');transcriber.current=await pipeline('automatic-speech-recognition','onnx-community/whisper-tiny',{dtype:'q8'}) as unknown as typeof transcriber.current;}}catch(error){console.error('Whisper load failed',error);setTalkState('idle');setMessage('音声認識エンジンを読み込めませんでした。ネット接続を確認して、もう一度試してね。');return;}
+  try{const active=transcriber.current;if(!active)throw Error('Whisper was not initialized');setMessage('むぎが声を文字にしています…');const result=await active(audio,{language:'japanese',task:'transcribe'}),text=result.text?.trim();if(!text){setTalkState('idle');setMessage('声を聞き取れませんでした。もう一度話してね。');return;}void answer(text);}catch(error){console.error('Whisper transcription failed',error);setTalkState('idle');setMessage('音声認識の実行に失敗しました。ページを再読み込みして、もう一度試してね。');}
  }
  function finishRecording(){const context=audioContext.current,chunks=pcmChunks.current;pcmChunks.current=[];const length=chunks.reduce((total,chunk)=>total+chunk.length,0),audio=new Float32Array(length);let offset=0;for(const chunk of chunks){audio.set(chunk,offset);offset+=chunk.length;}const sampleRate=context?.sampleRate??48000;releaseMic();if(audio.length<sampleRate*.25){setTalkState('idle');setMessage('声が小さいみたい。マイクに近づいて、もう一度話してね。');return;}setTalkState('thinking');setMessage('むぎが声を聞いています…');void transcribe(audio,sampleRate);}
  async function startTalking(){
@@ -35,7 +35,7 @@ export default function Home() {
   }catch{releaseMic();setTalkState('idle');setMessage('マイクの使用を許可してから、もう一度「話す」を押してね。');}
  }
  useEffect(()=>{const key=(e:KeyboardEvent)=>{if(['1','2','3'].includes(e.key))choose(({1:'pet',2:'toy',3:'feed'} as Record<string,string>)[e.key]);};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[]);
- useEffect(()=>()=>{releaseMic();worker.current?.terminate();window.speechSynthesis.cancel();},[]);
+ useEffect(()=>()=>{releaseMic();window.speechSynthesis.cancel();},[]);
  return <main className="game-shell"><div ref={mount} className="viewport" aria-label="猫のむぎが歩き回る3Dの部屋"/>
  <header className="topbar"><div className="brand"><PawPrint size={26}/><div><h1>むぎの部屋</h1><p>いっしょに、のんびり。</p></div></div><div className="model-links"><a href="/review">モデルレビュー</a><a href="/">おさんぽ版</a><a href="/?model=seated">座った版と比較</a></div></header>
  <aside className="cat-card"><div className="cat-title"><span className="live-dot"/><h2>むぎ</h2><span>{original?'キジトラ':'キジ白'}</span></div><p>今日は、どんなふうに遊ぶ？</p>{[['affection','なかよし'],['fullness','おなか'],['fun','ごきげん']].map(([key,label])=><div className="stat" key={key}><div><span>{label}</span><span>{Math.round(stats[key as keyof typeof stats])}%</span></div><Progress aria-label={label} value={stats[key as keyof typeof stats]}/></div>)}</aside>
