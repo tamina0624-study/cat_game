@@ -5,7 +5,7 @@ export function createCatVoice(){
  const ensure=()=>context??(context=new AudioContext());
  function unlock(){if(disposed)return;const ctx=ensure();void ctx.resume().catch(()=>{});}
  async function play(afterMeal=false){
-  if(disposed||muted||pending||active||(!afterMeal&&performance.now()-lastStart<5000))return;
+  if(disposed||muted||pending||active||(!afterMeal&&performance.now()-lastStart<3000))return;
   pending=true;
   try {const ctx=ensure();if(ctx.state!=='running')await ctx.resume();
    buffer??=fetch('/audio/meow.ogg').then(r=>{if(!r.ok)throw Error('Meow audio unavailable');return r.arrayBuffer();}).then(b=>ctx.decodeAudioData(b));

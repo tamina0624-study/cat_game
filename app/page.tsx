@@ -20,7 +20,7 @@ export default function Home() {
  async function answer(transcript:string){
   setTalkState('thinking');setMessage('むぎが考えています…');
   try{const response=await fetch('/api/cat-chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:transcript,history:history.current})});const data=await response.json() as {reply?:string;error?:string};if(!response.ok||!data.reply)throw Error(data.error||'会話につながりませんでした。');
-   history.current=[...history.current,{role:'user',content:transcript},{role:'assistant',content:data.reply}].slice(-6);setMessage(`むぎ：${data.reply}`);setTalkState('speaking');
+   history.current=[...history.current,{role:'user' as const,content:transcript},{role:'assistant' as const,content:data.reply}].slice(-6);setMessage(`むぎ：${data.reply}`);setTalkState('speaking');
    const utterance=new SpeechSynthesisUtterance(data.reply);utterance.lang='ja-JP';utterance.rate=1.08;utterance.pitch=1.22;utterance.onend=()=>setTalkState('idle');utterance.onerror=()=>setTalkState('idle');window.speechSynthesis.speak(utterance);
   }catch(e){setTalkState('idle');setMessage(e instanceof Error?e.message:'会話につながりませんでした。');}}
  async function transcribe(blob:Blob){

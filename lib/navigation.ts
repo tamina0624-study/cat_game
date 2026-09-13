@@ -23,15 +23,16 @@ export function findPath(start:Point,goal:Point):Point[]{
 }
 export function groundHeight(x:number,z:number){const r=Math.hypot(x/2.5,(z-.2)/2);const a=Math.max(0,Math.min(1,(1.025-r)/.05));return .053*a*a*(3-2*a);}
 export class WanderController{
- position:Point={x:0,z:0};yaw=0;speed=0;path:Point[]=[];wait=3;goal:Point|null=null;kind:'roam'|'feed'='roam';turning=0;
+ position:Point={x:0,z:0};yaw=0;speed=0;path:Point[]=[];wait=3;goal:Point|null=null;kind:'roam'|'feed'='roam';turning=0;speedMultiplier=1;
  constructor(private random= Math.random){}
  request(goal:Point,kind:'roam'|'feed'='roam'){const route=findPath(this.position,goal);if(!route.length)return false;this.path=route;this.goal={...goal};this.kind=kind;this.wait=0;return true;}
+ wander(maxDistance=5){for(let i=0;i<40;i++){const angle=this.random()*Math.PI*2,range=.9+this.random()*Math.max(.1,maxDistance-.9),target={x:this.position.x+Math.sin(angle)*range,z:this.position.z+Math.cos(angle)*range};if(isFree(target)&&this.request(target))return true;}return false;}
  pause(seconds:number){this.path=[];this.goal=null;this.speed=0;this.wait=Math.max(this.wait,seconds);}
  update(dt:number,paused=false){dt=Math.min(.05,Math.max(0,dt));const previous={...this.position};this.turning=0;
   if(paused){this.speed=0;return {dx:0,dz:0,arrived:false};}
-  if(!this.path.length){this.speed=0;this.wait-=dt;if(this.wait<=0&&this.kind==='roam'){for(let i=0;i<40;i++){const target={x:ROOM.minX+.2+this.random()*(ROOM.maxX-ROOM.minX-.4),z:ROOM.minZ+.2+this.random()*(ROOM.maxZ-ROOM.minZ-.4)};if(distance(target,this.position)>.9&&this.request(target))break;}if(!this.path.length)this.wait=2;}return {dx:0,dz:0,arrived:false};}
+  if(!this.path.length){this.speed=0;this.wait-=dt;if(this.wait<=0&&this.kind==='roam'){this.wander(5);if(!this.path.length)this.wait=2;}return {dx:0,dz:0,arrived:false};}
   const target=this.path[0],d=distance(this.position,target),desired=Math.atan2(target.x-this.position.x,target.z-this.position.z);const angle=Math.atan2(Math.sin(desired-this.yaw),Math.cos(desired-this.yaw));const turn=Math.max(-dt*1.7,Math.min(dt*1.7,angle));this.yaw+=turn;this.turning=turn;
-  const wanted=Math.abs(angle)>.38?0:Math.min(.55,d*1.8);this.speed+=(wanted-this.speed)*(1-Math.exp(-dt*6));
+  const wanted=Math.abs(angle)>.38?0:Math.min(.55*this.speedMultiplier,d*1.8);this.speed+=(wanted-this.speed)*(1-Math.exp(-dt*6));
   const step=Math.min(d,this.speed*dt),next={x:this.position.x+Math.sin(this.yaw)*step,z:this.position.z+Math.cos(this.yaw)*step};
   if(clearSegment(this.position,next))this.position=next;else{this.path=[];this.speed=0;this.wait=.5;}
   let arrived=false;if(d<.075){this.path.shift();if(!this.path.length){this.speed=0;this.wait=3+this.random()*4;arrived=true;}}
