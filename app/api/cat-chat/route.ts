@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     if (!response.ok) return json({ error: 'いまはお話ししにくいみたい。少し待ってから試してね。' }, 502);
     const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
     const reply = data.choices?.[0]?.message?.content?.trim();
-    if (!reply) return json({ error: 'うまく聞き取れなかったみたい。もう一度話してね。' }, 502);
+    if (!reply) return json({ error: 'むぎの返事を準備できませんでした。少し待ってから、もう一度話してね。' }, 502);
     return json({ reply: reply.slice(0, 900) });
   } catch { return json({ error: '会話につながりませんでした。少し待ってから試してね。' }, 502); }
 }
