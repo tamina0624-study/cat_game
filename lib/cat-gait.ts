@@ -9,7 +9,7 @@ export class CatGait {
   const front=name[0]==='F',neutral=new T.Vector3(upper.position.x,.064,upper.position.z+.015),anchor=cat.localToWorld(neutral.clone());anchor.y=groundHeight(anchor.x,anchor.z)+.064;
   this.legs.push({name,upper,lower,foot,front,l1:front?.50:.47,l2:.48,neutral,anchor,from:anchor.clone(),to:anchor.clone(),progress:1,swing:false,wasSwing:false,offset:i*.25});
  }}
- update(dt:number,velocity:T.Vector3,turn:number,activity:'walk'|'play'|'groom'='walk',time=0){
+ update(dt:number,velocity:T.Vector3,turn:number,activity:'walk'|'play'|'groom'|'sit'|'sleep'|'stretch'='walk',time=0){
   const moving=velocity.length()>.035||Math.abs(turn)>.002;this.cycle+=velocity.length()*dt/.45+Math.abs(turn)*.38;
   this.cat.updateMatrixWorld(true);
   for(const leg of this.legs){
@@ -31,6 +31,9 @@ export class CatGait {
      goal.y+=Math.sin(time*9)*.035;
     }
    }
+   if(activity==='sit')goal=this.cat.localToWorld(new T.Vector3(leg.upper.position.x,.08,leg.front?.42:-.16));
+   if(activity==='sleep')goal=this.cat.localToWorld(new T.Vector3(leg.upper.position.x*.78,.14,leg.front?.18:-.10));
+   if(activity==='stretch')goal=this.cat.localToWorld(new T.Vector3(leg.upper.position.x,.07,leg.front?.64:-.36));
    this.solve(leg,this.cat.worldToLocal(goal));
   }
  }
