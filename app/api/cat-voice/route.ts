@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const transcriptionResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'nvidia/nemotron-3-nano-omni:free', max_tokens: 180, temperature: 0,
+        model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', max_tokens: 180, temperature: 0,
         messages: [
           { role: 'system', content: 'あなたは日本語の音声文字起こし機能です。録音された音声を、聞こえた日本語の文章だけにして返してください。返事、説明、挨拶、話者名、句読点以外の記号は加えません。聞き取れない場合は「聞き取れませんでした」とだけ返してください。' },
           { role: 'user', content: [{ type: 'text', text: 'この音声を書き起こしてください。' }, { type: 'input_audio', input_audio: { data: audio, format: 'webm' } }] },
