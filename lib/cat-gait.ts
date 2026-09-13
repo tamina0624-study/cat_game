@@ -23,16 +23,14 @@ export class CatGait {
    if(activity==='play'&&leg.name==='FL'){
     goal=neutral.clone();goal.y+=.20+Math.sin(time*7)*.045;goal.add(this.cat.getWorldDirection(new T.Vector3()).multiplyScalar(.15));
    }
-   if(activity==='groom'&&leg.front){
-    const paw=(Math.floor(time*1.7)%2===0)===(leg.name==='FL');
-    if(paw){
-     const side=leg.name==='FL'?.18:-.18;
-     goal=this.cat.localToWorld(new T.Vector3(side,1.36,.58));
-     goal.y+=Math.sin(time*9)*.035;
-    }
+   if(activity==='groom'){
+    // Seated grooming: one forepaw is extended for licking while one hind leg opens to the side.
+    const targets:Record<string,T.Vector3>={FL:new T.Vector3(.24,.075,.72),FR:new T.Vector3(-.16,.22,.20),HL:new T.Vector3(.48,.075,-.34),HR:new T.Vector3(-.12,.18,-.12)};
+    goal=this.cat.localToWorld(targets[leg.name].clone());
+    if(leg.name==='FL')goal.y+=Math.sin(time*8)*.014;
    }
    if(activity==='sit')goal=this.cat.localToWorld(new T.Vector3(leg.upper.position.x,.08,leg.front?.42:-.16));
-   if(activity==='sleep')goal=this.cat.localToWorld(new T.Vector3(leg.upper.position.x*.78,.14,leg.front?.18:-.10));
+   if(activity==='sleep')goal=this.cat.localToWorld(new T.Vector3(leg.upper.position.x*(leg.front?.52:.36),leg.front?.20:.16,leg.front?.10:-.02));
    if(activity==='stretch')goal=this.cat.localToWorld(new T.Vector3(leg.upper.position.x,.07,leg.front?.64:-.36));
    this.solve(leg,this.cat.worldToLocal(goal));
   }
