@@ -4,6 +4,7 @@ type ChatMessage = { role: 'user' | 'assistant'; content: string };
 type RouterChoice = { finish_reason?: unknown; message?: { content?: unknown } };
 type RouterResponse = { model?: unknown; choices?: unknown; error?: unknown; usage?: unknown };
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
+const OPENROUTER_MODEL = 'inclusionai/ling-3.0-flash-vl:free';
 
 function responseSummary(status: number, data: RouterResponse, attempt: number) {
   const choices = Array.isArray(data.choices) ? data.choices : [];
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
     const { role, content } = item as Record<string, unknown>;
     return (role === 'user' || role === 'assistant') && typeof content === 'string' && content.length <= 600 ? [{ role, content }] : [];
   }) : [];
-  const body = JSON.stringify({ model: 'openrouter/free', max_tokens: 140, temperature: 0.8, messages: [
+  const body = JSON.stringify({ model: OPENROUTER_MODEL, messages: [
     { role: 'system', content: 'あなたは猫の「むぎ」です。やさしい日本語で、子どもにも分かる短い会話をします。返答は二文まで。危険な行動は勧めず、分からないことは正直に伝えてください。' },
     ...history, { role: 'user', content: message },
   ] });
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
   try {
     for (let attempt = 1; attempt <= 2; attempt++) {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(20_000),
+        method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(60_000),
       });
       const data = await response.json() as RouterResponse;
       console.info('cat-chat OpenRouter response summary', responseSummary(response.status, data, attempt));
