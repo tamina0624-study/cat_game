@@ -12,7 +12,7 @@ export async function startGame(host:HTMLElement,say:(s:string)=>void,report:(s:
  const camera=new T.PerspectiveCamera(36,1,.1,70);camera.position.set(4.2,3.1,7.9);
  const orbit=new OrbitControls(camera,renderer.domElement);orbit.target.set(0,1.18,0);orbit.enableDamping=true;orbit.enablePan=false;orbit.minDistance=4.2;orbit.maxDistance=12;orbit.maxPolarAngle=Math.PI*.48;orbit.minPolarAngle=.45;orbit.mouseButtons={LEFT:null as unknown as T.MOUSE,MIDDLE:T.MOUSE.DOLLY,RIGHT:T.MOUSE.ROTATE};orbit.update();
  scene.add(new T.HemisphereLight('#fff8e5','#7a8270',2.6));const sun=new T.DirectionalLight('#fff1d2',4);sun.position.set(-3,7,5);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-7,right:7,top:7,bottom:-7,near:.1,far:22});sun.shadow.bias=-.0003;sun.shadow.normalBias=.03;scene.add(sun);
- const mat=(color:string,roughness=.8)=>new T.MeshStandardMaterial({color,roughness});const wood=mat('#bc9874'),cream=mat('#e1e4d3'),dark=mat('#3e4941'),pink=mat('#b97c73'),white=mat('#d9d2bd');
+ const mat=(color:string,roughness=.8)=>new T.MeshStandardMaterial({color,roughness});const wood=mat('#bc9874'),cream=mat('#e1e4d3'),dark=mat('#3e4941'),white=mat('#d9d2bd');
  function mesh(g:T.BufferGeometry,m:T.Material,p:T.Object3D,pos:number[],scale=[1,1,1],name=''){const x=new T.Mesh(g,m);x.position.set(...pos as [number,number,number]);x.scale.set(...scale as [number,number,number]);x.castShadow=true;x.receiveShadow=true;x.name=name;p.add(x);return x;}
  const sphere=new T.SphereGeometry(1,40,28);
  function ell(p:T.Object3D,m:T.Material,pos:number[],s:number[],name=''){return mesh(sphere,m,p,pos,s,name);}
@@ -53,4 +53,3 @@ export async function startGame(host:HTMLElement,say:(s:string)=>void,report:(s:
  animate();
  return {mode,muted:voice.muted,reset:()=>{camera.position.set(4.2,3.1,7.9);orbit.target.set(0,1.18,0);orbit.update();},download:()=>{const a=document.createElement('a');a.href='/models/mugi-calico-v3.glb';a.download='mugi-calico-v3.glb';a.click();say('Blenderで制作した猫のモデルを保存しました。');},dispose:()=>{voice.dispose();disposed=true;cancelAnimationFrame(frame);observer.disconnect();orbit.dispose();window.removeEventListener('pointerup',up);renderer.domElement.removeEventListener('pointerdown',onDown);renderer.domElement.removeEventListener('pointermove',onMove);const gs=new Set<T.BufferGeometry>(),ms=new Set<T.Material>();scene.traverse(o=>{if(o instanceof T.Mesh){gs.add(o.geometry);(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m));}});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose());renderer.dispose();renderer.domElement.remove();}};
 }
-

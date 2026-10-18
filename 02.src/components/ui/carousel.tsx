@@ -95,12 +95,14 @@ function Carousel({
 
   React.useEffect(() => {
     if (!api) return;
-    onSelect(api);
+    const frame = requestAnimationFrame(() => onSelect(api));
     api.on('reInit', onSelect);
     api.on('select', onSelect);
 
     return () => {
-      api?.off('select', onSelect);
+      cancelAnimationFrame(frame);
+      api.off('reInit', onSelect);
+      api.off('select', onSelect);
     };
   }, [api, onSelect]);
 
@@ -121,6 +123,7 @@ function Carousel({
       <div
         onKeyDownCapture={handleKeyDown}
         className={cn('relative', className)}
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Carousel container follows the WAI-ARIA carousel pattern.
         role="region"
         aria-roledescription="carousel"
         data-slot="carousel"
@@ -158,6 +161,7 @@ function CarouselItem({ className, ...props }: React.ComponentProps<'div'>) {
 
   return (
     <div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Slides use the WAI-ARIA group role, not a form fieldset.
       role="group"
       aria-roledescription="slide"
       data-slot="carousel-item"

@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 function ItemGroup({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Items are polymorphic and may render links or custom listitem elements.
       role="list"
       data-slot="item-group"
       className={cn(

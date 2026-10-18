@@ -18,4 +18,3 @@ export function createCatVoice(){
  }
  return {unlock,play,muted:(value:boolean)=>{muted=value;if(value&&active){active.stop();active=null;}},dispose:()=>{disposed=true;if(active){active.stop();active=null;}if(context)void context.close();}};
 }
-

@@ -1,9 +1,10 @@
 import { pipeline } from '@huggingface/transformers';
 
-let transcriber: any;
+type Transcriber = (audio: Float32Array, options: { language: string; task: string }) => Promise<{ text: string }>;
+let transcriber: Transcriber | undefined;
 self.onmessage = async (event: MessageEvent<{ audio: Float32Array }>) => {
   try {
-    if (!transcriber) transcriber = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-tiny', { dtype: 'q8' });
+    if (!transcriber) transcriber = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-tiny', { dtype: 'q8' }) as unknown as Transcriber;
     const result = await transcriber(event.data.audio, { language: 'japanese', task: 'transcribe' });
     self.postMessage({ text: result.text as string });
   } catch {

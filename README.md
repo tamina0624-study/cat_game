@@ -101,7 +101,7 @@ React画面とThree.jsがブラウザで動作し、vinext / Workersがページ
 
 ### 前提条件
 
-- Node.js 22.13.0以上、npm、Git。
+- Node.js 22.23.3（22系）、npm、Git。.nvmrcに検証済みバージョンを指定しています。
 - WebGLと音声APIを利用できるブラウザ（ChromeまたはEdgeを想定）。
 - 音声認識モデルの取得、会話、外部音声合成にはインターネット接続。
 - 会話機能を利用する場合はOpenRouter APIキー。
@@ -136,15 +136,14 @@ npm run dev
 
 ### コミット検査
 
-Pythonを用意した後、ルートで実行します。
+検査用PythonとGitleaksはプロジェクト内のGit除外済みwork/へ導入済みです。システムのpyコマンドは不要です。
 
 ```powershell
-py -m pip install pre-commit
-py -m pre_commit install
-py -m pre_commit run --all-files
+./work/python-embed/python.exe 02.src/tools/install_checks.py
+./work/python-embed/python.exe 02.src/tools/run_checks.py
 ```
 
-`.pre-commit-config.yaml`はサブモジュールの実配置`GitSecurityTool/GitSecurityTool/`を参照します。独自の検知語を設定する前に、[構成と検証](./01.doc/構成と検証.md)のローカル追跡解除・除外手順を確認してください。
+追跡済み・未追跡（Git除外を除く）の全ファイルを検査します。独自の検知語は00.secret/security-keywords.jsonへ設定し、サブモジュールは変更しません。再構築・実行手順は[セキュリティ検査](./01.doc/security-checks.md)、検証状況は[検証結果](./01.doc/検証結果.md)を参照してください。
 
 ## 環境変数
 
@@ -187,7 +186,7 @@ Vite設定では開発ツール用に`WRANGLER_WRITE_LOGS=false`、`WRANGLER_LOG
 
 Cloudflare Workers向けのVite設定とSitesのホスティング設定は存在しますが、リポジトリ内に公開用のnpmスクリプトや、検証済みのデプロイ手順はありません。`npm run start`はWranglerによるローカル実行です。
 
-前回の作業記録では`npm run build`が終了コード1で失敗しており、公開に進む前に原因の解消とビルド確認が必要です。公開先のSecret設定も含めたデプロイ手順は未検証です。
+WindowsのNode.js 24.11.1ではビルドプロセスが異常終了（0xC0000409）しました。Node.js 22.23.3では本番ビルドの成功を確認済みです。22系へ切り替え、`node --version`を確認してから`npm run build`を実行してください。nvmを使用する場合は`nvm install 22.23.3`、`nvm use 22.23.3`で切り替えます。システムのNode.jsは今回変更していません。公開先のSecret設定も含めたデプロイ手順は未検証です。
 
 ## 制約・注意事項
 
@@ -198,7 +197,7 @@ Cloudflare Workers向けのVite設定とSitesのホスティング設定は存�
 - 初回のWhisperモデル取得には時間がかかり、推論速度は端末に依存します。オフラインでの全機能動作は保証していません。
 - 外部サービスや指定モデルの提供状況・利用制限により会話や音声合成に失敗する場合があります。コード内の`:free`表記はモデル指定であり、利用条件を保証するものではありません。
 - 音声サンプルは試聴専用で、選択した声をゲームへ適用・保存しません。
-- 前回の作業記録にビルド失敗・Lint指摘・Python未導入によるフック未有効化が記録されています。3D操作・マイク会話・外部サービス連携の手動確認も未完了です。詳細は[残課題](./03.log/leftover_tasks.txt)を参照してください。
+- Node.js 22.23.3でビルド成功を確認しました。Lint指摘は修正し、検査成功を確認しました。Python・検査フックは導入済みです。3D操作・マイク会話・外部サービス連携の手動確認も未完了です。詳細は[残課題](./03.log/leftover_tasks.txt)を参照してください。
 
 ## ディレクトリ構成
 

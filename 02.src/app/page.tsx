@@ -1,11 +1,11 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { Hand, Fish, Sparkles, RotateCcw, Download, PawPrint, Volume2, VolumeX, Mic, MicOff, LoaderCircle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { startGame, type GameAPI } from '@/lib/game';
-import { startGame as startSeated } from '@/lib/game-v3';
-import { startGame as startOriginal } from '@/lib/game-v1';
+import type { GameAPI } from '@/lib/game';
 
+type ChatMessage = { role: 'user' | 'assistant'; content: string };
 type DebugStep = { name: string; status: 'pending' | 'ok' | 'error'; detail?: string };
 type VoiceState = 'idle' | 'recording' | 'transcribing' | 'thinking' | 'speaking' | 'error';
 type RecognitionSource = 'mic' | 'fixed-test';
@@ -15,12 +15,12 @@ type TtsQuestStatus = { isAudioReady?: boolean; isAudioError?: boolean };
 
 export default function Home() {
  const mount = useRef<HTMLDivElement>(null), api = useRef<GameAPI | null>(null);
- const stream = useRef<MediaStream | null>(null), audioContext = useRef<AudioContext | null>(null), source = useRef<MediaStreamAudioSourceNode | null>(null), processor = useRef<ScriptProcessorNode | null>(null), silentGain = useRef<GainNode | null>(null), pcmChunks = useRef<Float32Array[]>([]), recordTimer = useRef<number | null>(null), transcriber = useRef<Transcriber | null>(null), history = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]), voiceAudio = useRef<HTMLAudioElement | null>(null);
+ const stream = useRef<MediaStream | null>(null), audioContext = useRef<AudioContext | null>(null), source = useRef<MediaStreamAudioSourceNode | null>(null), processor = useRef<AudioWorkletNode | null>(null), silentGain = useRef<GainNode | null>(null), pcmChunks = useRef<Float32Array[]>([]), recordTimer = useRef<number | null>(null), transcriber = useRef<Transcriber | null>(null), history = useRef<ChatMessage[]>([]), voiceAudio = useRef<HTMLAudioElement | null>(null);
  const recognitionGeneration = useRef(0), recordingGeneration = useRef<number | null>(null);
  const [ready, setReady] = useState(false), [error, setError] = useState(''), [mode, setMode] = useState('pet'), [message, setMessage] = useState('むぎが、あなたを待っています。');
- const [muted, setMuted] = useState(false), [original, setOriginal] = useState(false), [talkState, setTalkState] = useState<VoiceState>('idle'), [stats, setStats] = useState({ affection: 42, fullness: 55, fun: 50 }), [debug, setDebug] = useState<DebugStep[]>([]);
+ const [muted, setMuted] = useState(false), [original, setOriginal] = useState(false), [talkState, setTalkState] = useState<VoiceState>('idle'), [stats, setStats] = useState({ affection: 42, fullness: 55, fun: 50 }), [, setDebug] = useState<DebugStep[]>([]);
 
- useEffect(() => { let cancelled = false; const el = mount.current; if (!el) return; const isOriginal = new URLSearchParams(window.location.search).get('model') === 'original'; setOriginal(isOriginal); const init = isOriginal ? startOriginal : new URLSearchParams(window.location.search).get('model') === 'seated' ? startSeated : startGame; Promise.resolve().then(() => init(el, setMessage, setStats)).then(game => { if (cancelled) { game.dispose(); return; } api.current = game; setReady(true); }).catch(e => { if (cancelled) return; console.error(e); setError('猫を読み込めませんでした。再読み込みするか、ChromeまたはEdgeでお試しください。'); }); return () => { cancelled = true; api.current?.dispose(); }; }, []);
+ useEffect(() => { let cancelled = false; const el = mount.current; if (!el) return; const isOriginal = new URLSearchParams(window.location.search).get('model') === 'original'; setOriginal(isOriginal); const gameModule = isOriginal ? import('@/lib/game-v1') : new URLSearchParams(window.location.search).get('model') === 'seated' ? import('@/lib/game-v3') : import('@/lib/game'); gameModule.then(module => cancelled ? null : module.startGame(el, setMessage, setStats)).then(game => { if (!game) return; if (cancelled) { game.dispose(); return; } api.current = game; setReady(true); }).catch(e => { if (cancelled) return; console.error(e); setError('猫を読み込めませんでした。再読み込みするか、ChromeまたはEdgeでお試しください。'); }); return () => { cancelled = true; api.current?.dispose(); }; }, []);
 
  function choose(next: string) { setMode(next); api.current?.mode(next); }
  function clearDebug() { setDebug([]); }
@@ -33,9 +33,8 @@ export default function Home() {
  function setCurrent(generation: number, sourceName: RecognitionSource, nextState: VoiceState, nextMessage: string) { if (!isCurrent(generation, sourceName, '画面状態')) return false; setTalkState(nextState); setMessage(nextMessage); return true; }
  function finishRun(generation: number, sourceName: RecognitionSource, state: VoiceState = 'idle') { if (!isCurrent(generation, sourceName, '完了')) return; setTalkState(state); console.log(`[voice ${sourceLabel(sourceName, generation)}] finished`); }
  function beginRun(sourceName: RecognitionSource) { const generation = ++recognitionGeneration.current; clearDebug(); console.log(`[voice ${sourceLabel(sourceName, generation)}] started`, new Date().toISOString()); return generation; }
- function releaseMic() { if (recordTimer.current !== null) { window.clearTimeout(recordTimer.current); recordTimer.current = null; } processor.current?.disconnect(); source.current?.disconnect(); silentGain.current?.disconnect(); processor.current = null; source.current = null; silentGain.current = null; stream.current?.getTracks().forEach(track => track.stop()); stream.current = null; const context = audioContext.current; audioContext.current = null; if (context && context.state !== 'closed') void context.close(); }
+ function releaseMic() { if (recordTimer.current !== null) { window.clearTimeout(recordTimer.current); recordTimer.current = null; } processor.current?.port.close(); processor.current?.disconnect(); source.current?.disconnect(); silentGain.current?.disconnect(); processor.current = null; source.current = null; silentGain.current = null; stream.current?.getTracks().forEach(track => track.stop()); stream.current = null; const context = audioContext.current; audioContext.current = null; if (context && context.state !== 'closed') void context.close(); }
  function stopVoiceAudio() { if (voiceAudio.current) { voiceAudio.current.pause(); voiceAudio.current.src = ''; voiceAudio.current = null; } }
- function stopTalking() { if (talkState === 'recording') { finishRecording(); return; } stopVoiceAudio(); window.speechSynthesis.cancel(); releaseMic(); setTalkState('idle'); }
  function speakFallback(text: string, sourceName: RecognitionSource, generation: number) { const utterance = new SpeechSynthesisUtterance(text); utterance.lang = 'ja-JP'; utterance.rate = 1.04; utterance.pitch = 1.18; utterance.voice = window.speechSynthesis.getVoices().find(voice => /sayaka/i.test(voice.name) && voice.lang.toLowerCase().startsWith('ja')) ?? null; utterance.onend = () => { if (isCurrent(generation, sourceName, '標準音声完了')) finishRun(generation, sourceName); }; utterance.onerror = () => { if (isCurrent(generation, sourceName, '標準音声失敗')) { setTalkState('error'); setMessage('むぎの声を再生できませんでした。'); } }; window.speechSynthesis.speak(utterance); }
  async function speakVoicevox(text: string, sourceName: RecognitionSource, generation: number) { try { const request = new URL('https://api.tts.quest/v3/voicevox/synthesis'); request.searchParams.set('text', text); request.searchParams.set('speaker', '8'); const jobResponse = await fetch(request); const job = await jobResponse.json() as TtsQuestJob; if (!jobResponse.ok || !job.success || !job.audioStatusUrl || !job.mp3DownloadUrl) throw Error(`TTSQuest unavailable${job.retryAfter ? `; retry after ${job.retryAfter}s` : ''}`); let ready = false; for (let i = 0; i < 40; i++) { await new Promise(resolve => window.setTimeout(resolve, 750)); if (!isCurrent(generation, sourceName, 'VOICEVOX待機')) return; const statusResponse = await fetch(job.audioStatusUrl); const status = await statusResponse.json() as TtsQuestStatus; if (status.isAudioError) throw Error('TTSQuest synthesis failed'); if (status.isAudioReady) { ready = true; break; } } if (!ready) throw Error('TTSQuest timed out'); if (!isCurrent(generation, sourceName, 'VOICEVOX再生')) return; const audio = new Audio(job.mp3DownloadUrl); voiceAudio.current = audio; audio.onended = () => { if (voiceAudio.current === audio) voiceAudio.current = null; if (isCurrent(generation, sourceName, 'VOICEVOX完了')) finishRun(generation, sourceName); }; audio.onerror = () => { if (voiceAudio.current === audio) voiceAudio.current = null; if (isCurrent(generation, sourceName, 'VOICEVOX再生失敗')) speakFallback(text, sourceName, generation); }; await audio.play(); } catch (reason) { console.warn(`[voice ${sourceLabel(sourceName, generation)}] VOICEVOX fallback`, reason); if (isCurrent(generation, sourceName, 'VOICEVOXフォールバック')) speakFallback(text, sourceName, generation); } }
 
@@ -47,7 +46,8 @@ export default function Home() {
    const data = await response.json() as { reply?: string; error?: string };
    if (!isCurrent(generation, sourceName, '会話応答')) return;
    if (!response.ok || !data.reply) throw Error(data.error || '会話につながりませんでした。');
-   history.current = [...history.current, { role: 'user', content: transcript }, { role: 'assistant', content: data.reply }].slice(-6);
+   const turn: ChatMessage[] = [{ role: 'user', content: transcript }, { role: 'assistant', content: data.reply }];
+   history.current = [...history.current, ...turn].slice(-6);
    setMessage(`むぎ：${data.reply}`); setTalkState('speaking'); console.log(`[voice ${sourceLabel(sourceName, generation)}] cat-chat response received`);
    void speakVoicevox(data.reply, sourceName, generation);
   } catch (reason) {
@@ -66,15 +66,73 @@ export default function Home() {
   try { const active = transcriber.current; if (!active) throw Error('Whisper was not initialized'); markCurrent(generation, sourceName, 'Whisper推論', 'pending', label); console.log(`[voice ${label}] Whisper inference started`); const result = await active(audio, { language: 'japanese', task: 'transcribe' }), text = result.text?.trim(); if (!isCurrent(generation, sourceName, 'Whisper推論結果')) return; mark('Whisper推論', 'ok', label); console.log(`[voice ${label}] Whisper result`, text || '(empty)'); if (!text) { mark('認識結果', allowEmpty ? 'ok' : 'error', allowEmpty ? '固定PCMの推論完了（文字列なし）' : '文字列なし'); setCurrent(generation, sourceName, 'idle', allowEmpty ? '固定PCMテストは推論まで完了しました。' : '声を聞き取れませんでした。もう一度話してね。'); return; } mark('認識結果', 'ok', `${label} / ${text}`); void answer(text, sourceName, generation); } catch (reason) { console.error(`[voice ${label}] Whisper transcription failed`, reason); markCurrent(generation, sourceName, 'Whisper推論', 'error', errorDetail(reason)); setCurrent(generation, sourceName, 'error', '音声認識の実行に失敗しました。ページを再読み込みして、もう一度試してね。'); }
  }
 
- function finishRecording() { const generation = recordingGeneration.current, sourceName: RecognitionSource = 'mic'; if (generation === null || !isCurrent(generation, sourceName, '録音停止')) return; const context = audioContext.current, chunks = pcmChunks.current; pcmChunks.current = []; const length = chunks.reduce((total, chunk) => total + chunk.length, 0), audio = new Float32Array(length); let offset = 0; for (const chunk of chunks) { audio.set(chunk, offset); offset += chunk.length; } const sampleRate = context?.sampleRate ?? 48000, stats = pcmStats(audio, sampleRate); releaseMic(); console.log(`[voice ${sourceLabel(sourceName, generation)}] recording stopped`, `${stats.seconds.toFixed(2)} sec`); mark('PCM収録', stats.rms < .001 ? 'error' : 'ok', `${sourceLabel(sourceName, generation)} / ${audio.length} samples / ${stats.seconds.toFixed(2)} sec / ${sampleRate} Hz / RMS ${stats.rms.toFixed(5)}`); if (audio.length < sampleRate * .25) { setCurrent(generation, sourceName, 'error', '声が小さいみたい。マイクに近づいて、もう一度話してね。'); return; } setCurrent(generation, sourceName, 'transcribing', 'むぎが声を聞いています…'); void transcribe(audio, sampleRate, sourceName, generation); }
+ async function finishRecording() {
+  const generation = recordingGeneration.current, sourceName: RecognitionSource = 'mic';
+  if (generation === null || !isCurrent(generation, sourceName, 'recording stop')) return;
+  recordingGeneration.current = null;
+  if (recordTimer.current !== null) { window.clearTimeout(recordTimer.current); recordTimer.current = null; }
+  const capture = processor.current;
+  if (capture) await new Promise<void>(resolve => {
+   const timeout = window.setTimeout(resolve, 1000);
+   capture.port.onmessage = (event: MessageEvent<{ type: string; audio?: Float32Array }>) => {
+    if (generation !== recognitionGeneration.current) { window.clearTimeout(timeout); resolve(); return; }
+    if (event.data.type === 'pcm' && event.data.audio) pcmChunks.current.push(event.data.audio);
+    if (event.data.type === 'flushed') { window.clearTimeout(timeout); resolve(); }
+   };
+   capture.port.postMessage('flush');
+  });
+  if (!isCurrent(generation, sourceName, 'recording flushed')) return;
+  const context = audioContext.current, chunks = pcmChunks.current; pcmChunks.current = [];
+  const length = chunks.reduce((total, chunk) => total + chunk.length, 0), audio = new Float32Array(length);
+  let offset = 0; for (const chunk of chunks) { audio.set(chunk, offset); offset += chunk.length; }
+  const sampleRate = context?.sampleRate ?? 48000, stats = pcmStats(audio, sampleRate);
+  releaseMic();
+  mark('PCM capture', stats.rms < .001 ? 'error' : 'ok', sourceLabel(sourceName, generation) + ' / ' + audio.length + ' samples / ' + sampleRate + ' Hz');
+  if (audio.length < sampleRate * .25) { setCurrent(generation, sourceName, 'error', '録音が短すぎます。もう一度話してね。'); return; }
+  setCurrent(generation, sourceName, 'transcribing', 'むぎが声を聞いています…');
+  void transcribe(audio, sampleRate, sourceName, generation);
+ }
  async function runWhisperTest() { if (talkState !== 'idle' && talkState !== 'error') return; const generation = beginRun('fixed-test'); mark('固定PCMテスト', 'pending', `${sourceLabel('fixed-test', generation)} / /audio/meow.ogg`); try { const response = await fetch('/audio/meow.ogg'); if (!response.ok) throw Error(`HTTP ${response.status}`); const context = new AudioContext(), buffer = await context.decodeAudioData(await response.arrayBuffer()), fixedAudio = buffer.getChannelData(0).slice(); await context.close(); if (!isCurrent(generation, 'fixed-test', '固定PCM準備')) return; mark('固定PCMテスト', 'ok', `${sourceLabel('fixed-test', generation)} / ${fixedAudio.length} samples / ${buffer.sampleRate} Hz / mono`); void transcribe(fixedAudio, buffer.sampleRate, 'fixed-test', generation, true); } catch (reason) { console.error(`[voice ${sourceLabel('fixed-test', generation)}] fixed PCM test failed`, reason); markCurrent(generation, 'fixed-test', '固定PCMテスト', 'error', errorDetail(reason)); setCurrent(generation, 'fixed-test', 'error', '固定PCMテストの準備に失敗しました。'); } }
- async function startTalking() { if (talkState === 'recording') return finishRecording(); if (talkState === 'transcribing' || talkState === 'thinking' || talkState === 'speaking') return; stopVoiceAudio(); window.speechSynthesis.cancel(); const generation = beginRun('mic'); recordingGeneration.current = generation; mark('マイク取得', 'pending', sourceLabel('mic', generation)); try { const input = await navigator.mediaDevices.getUserMedia({ audio: true }); if (!isCurrent(generation, 'mic', 'マイク取得')) { input.getTracks().forEach(track => track.stop()); return; } mark('マイク取得', 'ok', sourceLabel('mic', generation)); mark('AudioContext作成', 'pending', sourceLabel('mic', generation)); const context = new AudioContext(); await context.resume(); if (!isCurrent(generation, 'mic', 'AudioContext作成')) { void context.close(); return; } mark('AudioContext作成', 'ok', `${sourceLabel('mic', generation)} / ${context.sampleRate} Hz`); const inputSource = context.createMediaStreamSource(input), capture = context.createScriptProcessor(4096, 1, 1), mute = context.createGain(); mute.gain.value = 0; pcmChunks.current = []; capture.onaudioprocess = event => { if (generation === recognitionGeneration.current) pcmChunks.current.push(new Float32Array(event.inputBuffer.getChannelData(0))); }; inputSource.connect(capture); capture.connect(mute); mute.connect(context.destination); stream.current = input; audioContext.current = context; source.current = inputSource; processor.current = capture; silentGain.current = mute; setTalkState('recording'); setMessage('録音中。話し終えたら「止める」を押してね。12秒後には自動で送ります。'); recordTimer.current = window.setTimeout(finishRecording, 12_000); console.log(`[voice ${sourceLabel('mic', generation)}] microphone ready`); } catch (reason) { console.error(`[voice ${sourceLabel('mic', generation)}] microphone setup failed`, reason); markCurrent(generation, 'mic', 'マイク取得', 'error', errorDetail(reason)); releaseMic(); setCurrent(generation, 'mic', 'error', 'マイクの使用を許可してから、もう一度「話す」を押してね。'); } }
+ async function startTalking() {
+  if (talkState === 'recording') return finishRecording();
+  if (talkState === 'transcribing' || talkState === 'thinking' || talkState === 'speaking') return;
+  stopVoiceAudio(); window.speechSynthesis.cancel();
+  const generation = beginRun('mic'); recordingGeneration.current = generation;
+  mark('マイク取得', 'pending', sourceLabel('mic', generation));
+  try {
+   const input = await navigator.mediaDevices.getUserMedia({ audio: true });
+   if (!isCurrent(generation, 'mic', 'マイク取得')) { input.getTracks().forEach(track => track.stop()); return; }
+   stream.current = input;
+   mark('マイク取得', 'ok', sourceLabel('mic', generation));
+   const context = new AudioContext(); audioContext.current = context;
+   await context.resume();
+   await context.audioWorklet.addModule('/audio/pcm-capture.worklet.js');
+   if (!isCurrent(generation, 'mic', 'AudioWorklet準備')) return;
+   mark('AudioWorklet準備', 'ok', context.sampleRate + ' Hz');
+   const inputSource = context.createMediaStreamSource(input);
+   const capture = new AudioWorkletNode(context, 'pcm-capture', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+   const mute = context.createGain(); mute.gain.value = 0;
+   source.current = inputSource; processor.current = capture; silentGain.current = mute; pcmChunks.current = [];
+   capture.port.onmessage = (event: MessageEvent<{ type: string; audio?: Float32Array }>) => {
+    if (generation === recognitionGeneration.current && event.data.type === 'pcm' && event.data.audio) pcmChunks.current.push(event.data.audio);
+   };
+   inputSource.connect(capture); capture.connect(mute); mute.connect(context.destination);
+   setTalkState('recording'); setMessage('録音中。話し終えたら「止める」を押してね。12秒後には自動で送ります。');
+   recordTimer.current = window.setTimeout(() => { void finishRecording(); }, 12_000);
+  } catch (reason) {
+   if (!isCurrent(generation, 'mic', 'マイク準備失敗')) return;
+   console.error('Microphone setup failed', reason);
+   mark('マイク取得', 'error', errorDetail(reason)); releaseMic();
+   setCurrent(generation, 'mic', 'error', 'マイクの使用許可と接続環境を確認して、もう一度「話す」を押してね。');
+  }
+ }
  useEffect(() => { const key = (event: KeyboardEvent) => { if (['1', '2', '3'].includes(event.key)) choose(({ 1: 'pet', 2: 'toy', 3: 'feed' } as Record<string, string>)[event.key]); }; window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key); }, []);
  useEffect(() => () => { recognitionGeneration.current++; stopVoiceAudio(); releaseMic(); window.speechSynthesis.cancel(); }, []);
  const voiceBusy = talkState === 'transcribing' || talkState === 'thinking' || talkState === 'speaking';
  return <main className="game-shell"><div ref={mount} className="viewport" aria-label="猫のむぎが歩き回る3Dの部屋" />
- <header className="topbar"><div className="brand"><PawPrint size={26} /><div><h1>むぎの部屋</h1><p>いっしょに、のんびり。</p></div></div><div className="model-links"><a href="/review">モデルレビュー</a><a href="/voice-samples">声を試聴</a><a href="/">おさんぽ版</a><a href="/?model=seated">座った版と比較</a></div></header>
+ {/* oxlint-disable-next-line nextjs/no-html-link-for-pages -- Model comparison links require a full remount to select the model. */}
+ <header className="topbar"><div className="brand"><PawPrint size={26} /><div><h1>むぎの部屋</h1><p>いっしょに、のんびり。</p></div></div><div className="model-links"><Link href="/review">モデルレビュー</Link><Link href="/voice-samples">声を試聴</Link><a href="/">おさんぽ版</a><a href="/?model=seated">座った版と比較</a></div></header>
  <aside className="cat-card"><div className="cat-title"><span className="live-dot" /><h2>むぎ</h2><span>{original ? 'キジトラ' : 'キジ白'}</span></div><p>今日は、どんなふうに遊ぶ？</p>{[['affection', 'なかよし'], ['fullness', 'おなか'], ['fun', 'ごきげん']].map(([key, label]) => <div className="stat" key={key}><div><span>{label}</span><span>{Math.round(stats[key as keyof typeof stats])}%</span></div><Progress aria-label={label} value={stats[key as keyof typeof stats]} /></div>)}</aside>
  <div className="view-controls"><button disabled={!ready} title={muted ? '音を出す' : '音を消す'} aria-label={muted ? '音を出す' : '音を消す'} aria-pressed={muted} onClick={() => { api.current?.muted(!muted); setMuted(!muted); }}>{muted ? <VolumeX size={20} /> : <Volume2 size={20} />}</button><button title="視点を戻す" aria-label="視点を戻す" onClick={() => api.current?.reset()}><RotateCcw size={20} /></button><button title="猫の3Dモデルを保存" aria-label="猫の3Dモデルを保存" onClick={() => api.current?.download()}><Download size={20} /></button></div>
- <section className="bottom-panel"><p className="message" role="status">{error || (!ready ? 'むぎのお部屋を準備しています…' : message)}</p><div className="actions"><button disabled={!ready} aria-pressed={mode === 'pet'} onClick={() => choose('pet')}><Hand /><span>なでる<small>猫をドラッグ</small></span><kbd>1</kbd></button><button disabled={!ready} aria-pressed={mode === 'toy'} onClick={() => choose('toy')}><Sparkles /><span>おもちゃ<small>マウスでじゃらす</small></span><kbd>2</kbd></button><button disabled={!ready} aria-pressed={mode === 'feed'} onClick={() => choose('feed')}><Fish /><span>ごはん<small>クリックであげる</small></span><kbd>3</kbd></button><button className="talk-button" disabled={!ready || voiceBusy} aria-pressed={talkState === 'recording'} onClick={startTalking}>{voiceBusy ? <LoaderCircle className="spin" /> : talkState === 'recording' ? <MicOff /> : <Mic />}<span>{talkState === 'recording' ? '止める' : '話す'}<small>{talkState === 'transcribing' ? '文字起こし中…' : talkState === 'thinking' ? '考え中…' : talkState === 'speaking' ? 'お返事中…' : 'マイクで話しかける'}</small></span></button></div><button className="whisper-test" disabled={!ready || talkState === 'recording' || voiceBusy} onClick={runWhisperTest}>Whisper単体テスト（固定PCM）</button><p className="hint">「話す」を押した時だけマイクを使います <b>·</b> 右ドラッグ：見回す <b>·</b> 1・2・3：触れ合いを選ぶ <br/><small>VOICEVOX: 春日部つむぎ（音声合成のため会話文をTTSQuestへ送信します）</small></p></section></main>;
+ <section className="bottom-panel"><output className="message">{error || (!ready ? 'むぎのお部屋を準備しています…' : message)}</output><div className="actions"><button disabled={!ready} aria-pressed={mode === 'pet'} onClick={() => choose('pet')}><Hand /><span>なでる<small>猫をドラッグ</small></span><kbd>1</kbd></button><button disabled={!ready} aria-pressed={mode === 'toy'} onClick={() => choose('toy')}><Sparkles /><span>おもちゃ<small>マウスでじゃらす</small></span><kbd>2</kbd></button><button disabled={!ready} aria-pressed={mode === 'feed'} onClick={() => choose('feed')}><Fish /><span>ごはん<small>クリックであげる</small></span><kbd>3</kbd></button><button className="talk-button" disabled={!ready || voiceBusy} aria-pressed={talkState === 'recording'} onClick={startTalking}>{voiceBusy ? <LoaderCircle className="spin" /> : talkState === 'recording' ? <MicOff /> : <Mic />}<span>{talkState === 'recording' ? '止める' : '話す'}<small>{talkState === 'transcribing' ? '文字起こし中…' : talkState === 'thinking' ? '考え中…' : talkState === 'speaking' ? 'お返事中…' : 'マイクで話しかける'}</small></span></button></div><button className="whisper-test" disabled={!ready || talkState === 'recording' || voiceBusy} onClick={runWhisperTest}>Whisper単体テスト（固定PCM）</button><p className="hint">「話す」を押した時だけマイクを使います <b>·</b> 右ドラッグ：見回す <b>·</b> 1・2・3：触れ合いを選ぶ <br/><small>VOICEVOX: 春日部つむぎ（音声合成のため会話文をTTSQuestへ送信します）</small></p></section></main>;
 }

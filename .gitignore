@@ -8,6 +8,9 @@
 !.yarn/releases
 !.yarn/versions
 
+#security
+/00.secret/
+
 # testing
 /coverage
 
