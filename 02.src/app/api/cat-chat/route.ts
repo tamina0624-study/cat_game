@@ -4,14 +4,14 @@ type ChatMessage = { role: 'user' | 'assistant'; content: string };
 type RouterChoice = { finish_reason?: unknown; message?: { content?: unknown } };
 type RouterResponse = { model?: unknown; choices?: unknown; error?: unknown; usage?: unknown };
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
-const OPENROUTER_MODEL = 'inclusionai/ling-3.0-flash-vl:free';
+const OPENROUTER_MODEL = 'google/gemma-4-26b-a4b-it:free';
 
-function responseSummary(status: number, data: RouterResponse, attempt: number) {
+function responseSummary(status: number, data: RouterResponse, attempt: number, elapsedMs: number) {
   const choices = Array.isArray(data.choices) ? data.choices : [];
   const first = choices[0] as RouterChoice | undefined;
   const content = first?.message?.content;
   return {
-    attempt, status, model: typeof data.model === 'string' ? data.model : null,
+    attempt, status, elapsedMs, model: typeof data.model === 'string' ? data.model : null,
     choicesLength: choices.length, finishReason: typeof first?.finish_reason === 'string' ? first.finish_reason : null,
     contentType: content === null ? 'null' : typeof content,
     contentLength: typeof content === 'string' ? content.trim().length : null,
@@ -31,18 +31,21 @@ export async function POST(request: Request) {
     const { role, content } = item as Record<string, unknown>;
     return (role === 'user' || role === 'assistant') && typeof content === 'string' && content.length <= 600 ? [{ role, content }] : [];
   }) : [];
-  const body = JSON.stringify({ model: OPENROUTER_MODEL, messages: [
+  const body = JSON.stringify({ model: OPENROUTER_MODEL, max_tokens: 128, provider: { sort: 'latency' }, messages: [
     { role: 'system', content: 'あなたは猫の「むぎ」です。やさしい日本語で、子どもにも分かる短い会話をします。返答は二文まで。危険な行動は勧めず、分からないことは正直に伝えてください。' },
     ...history, { role: 'user', content: message },
   ] });
 
   try {
+    const startedAt = Date.now();
     for (let attempt = 1; attempt <= 2; attempt++) {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(60_000),
       });
       const data = await response.json() as RouterResponse;
-      console.info('cat-chat OpenRouter response summary', responseSummary(response.status, data, attempt));
+      console.info('cat-chat OpenRouter response summary', responseSummary(response.status, data, attempt, Date.now() - startedAt));
+      if (response.status === 429) return json({ error: '会話サービスの利用制限に達しました。時間をおいてから、もう一度試してね。' }, 429);
+      if (response.status === 401) return json({ error: '会話サービスのAPIキーを確認してください。' }, 503);
       if (!response.ok) return json({ error: 'いまはお話ししにくいみたい。少し待ってから試してね。' }, 502);
       const content = (Array.isArray(data.choices) ? data.choices[0] as RouterChoice | undefined : undefined)?.message?.content;
       if (typeof content === 'string' && content.trim()) return json({ reply: content.trim().slice(0, 900) });

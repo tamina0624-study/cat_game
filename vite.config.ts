@@ -47,9 +47,14 @@ export default defineConfig(async () => {
   return {
     publicDir: '02.src/public',
     css: { postcss: { plugins: [tailwindcss()] } },
-    server: isCodexSeatbeltSandbox
-      ? { watch: { useFsEvents: false, usePolling: true } }
-      : undefined,
+    server: {
+      // Vite 8 can forward errors before its WebSocket is ready, recursively
+      // causing unhandled rejections. Keep browser errors in the browser.
+      forwardConsole: false,
+      ...(isCodexSeatbeltSandbox
+        ? { watch: { useFsEvents: false, usePolling: true } }
+        : {}),
+    },
     plugins: [
       vinext({ appDir: '02.src' }),
       sites(),

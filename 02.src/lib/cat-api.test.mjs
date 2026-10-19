@@ -48,6 +48,8 @@ test('chat retries an empty reply once, filters history, and limits reply length
   const post = loadRoute('cat-chat', async (_url, options) => {
     calls++;
     const body = JSON.parse(options.body);
+    assert.equal(body.max_tokens, 128);
+    assert.equal(body.provider.sort, 'latency');
     assert.equal(body.messages.some((message) => message.role === 'invalid'), false);
     assert.ok(body.messages.length <= 8);
     return Response.json({ choices: [{ message: { content: calls === 1 ? '' : 'x'.repeat(1000) } }] });
